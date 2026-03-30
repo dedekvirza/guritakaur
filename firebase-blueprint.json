@@ -1,0 +1,94 @@
+{
+  "entities": {
+    "Settings": {
+      "title": "Event Settings",
+      "description": "Global settings for the Festival Gurita 2026 invitation.",
+      "type": "object",
+      "properties": {
+        "logoUrl": {
+          "type": "string",
+          "description": "URL of the festival logo."
+        },
+        "bannerUrl": {
+          "type": "string",
+          "description": "URL of the festival banner/photo."
+        },
+        "eventName": {
+          "type": "string",
+          "description": "Name of the event."
+        },
+        "theme": {
+          "type": "string",
+          "description": "Theme of the event."
+        },
+        "dates": {
+          "type": "string",
+          "description": "Event dates."
+        },
+        "location": {
+          "type": "string",
+          "description": "Event location name."
+        },
+        "locationUrl": {
+          "type": "string",
+          "description": "Google Maps URL."
+        },
+        "galleryImages": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "description": "URLs for tourist destination photos."
+        },
+        "heroLogoUrl": {
+          "type": "string",
+          "description": "URL of the stylized hero logo (e.g., the octopus logo)."
+        },
+        "musicUrl": {
+          "type": "string",
+          "description": "URL of the background music file (MP3)."
+        }
+      },
+      "required": ["eventName", "theme", "dates", "location"]
+    },
+    "Guest": {
+      "title": "Guest",
+      "description": "A guest invited to the festival.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Full name of the guest."
+        },
+        "title": {
+          "type": "string",
+          "description": "Job title or position of the guest."
+        },
+        "phone": {
+          "type": "string",
+          "description": "WhatsApp phone number of the guest (optional)."
+        },
+        "slug": {
+          "type": "string",
+          "description": "Unique URL slug for the guest."
+        },
+        "createdAt": {
+          "type": "string",
+          "format": "date-time",
+          "description": "When the guest was added."
+        }
+      },
+      "required": ["name", "slug"]
+    }
+  },
+  "firestore": {
+    "/settings/config": {
+      "schema": "Settings",
+      "description": "The global configuration for the invitation app."
+    },
+    "/guests/{guestId}": {
+      "schema": "Guest",
+      "description": "A collection of all invited guests."
+    }
+  }
+}

@@ -1,0 +1,80 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // ===============================================================
+    // Assumed Data Model
+    // ===============================================================
+    //
+    // Collection: settings
+    // Document ID: config
+    // Fields:
+    //   - logoUrl: string (optional)
+    //   - bannerUrl: string (optional)
+    //   - eventName: string (required)
+    //   - theme: string (required)
+    //   - dates: string (required)
+    //   - location: string (required)
+    //   - locationUrl: string (required)
+    //   - galleryImages: list (optional)
+    //   - heroLogoUrl: string (optional)
+    //   - musicUrl: string (optional)
+    //
+    // Collection: guests
+    // Document ID: auto-generated
+    // Fields:
+    //   - name: string (required, 1-100 chars)
+    //   - title: string (optional, 0-100 chars)
+    //   - phone: string (optional, 0-20 chars)
+    //   - slug: string (required, unique-ish)
+    //   - createdAt: number (required)
+    //
+    // ===============================================================
+
+    // Helper Functions
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    function isAdmin() {
+      return isAuthenticated() && 
+        (request.auth.token.email.lower() == "dodimagis@gmail.com" || 
+         request.auth.token.email.lower() == "guritakaur@festival.com");
+    }
+
+    function isValidSettings(data) {
+      return data.keys().hasAll(['eventName', 'theme', 'dates', 'location', 'locationUrl']) &&
+             data.eventName is string && data.eventName.size() > 0 && data.eventName.size() < 200 &&
+             data.theme is string && data.theme.size() > 0 && data.theme.size() < 200 &&
+             data.dates is string && data.dates.size() > 0 && data.dates.size() < 200 &&
+             data.location is string && data.location.size() > 0 && data.location.size() < 500 &&
+             data.locationUrl is string && data.locationUrl.size() > 0 && data.locationUrl.size() < 2000 &&
+             (!('galleryImages' in data) || (data.galleryImages is list && data.galleryImages.size() <= 20)) &&
+             (!('heroLogoUrl' in data) || (data.heroLogoUrl is string && data.heroLogoUrl.size() < 2000)) &&
+             (!('musicUrl' in data) || (data.musicUrl is string && data.musicUrl.size() < 2000));
+    }
+
+    function isValidGuest(data) {
+      return data.keys().hasAll(['name', 'slug', 'createdAt']) &&
+             data.name is string && data.name.size() > 0 && data.name.size() < 100 &&
+             data.slug is string && data.slug.size() > 0 && data.slug.size() < 150 &&
+             data.createdAt is number &&
+             (!('title' in data) || (data.title is string && data.title.size() <= 100)) &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 20));
+    }
+
+    // Settings: Publicly readable, only admin can write
+    match /settings/config {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidSettings(request.resource.data);
+      allow delete: if isAdmin();
+    }
+
+    // Guests: Publicly readable (to view invitation), only admin can write
+    match /guests/{guestId} {
+      allow read: if true;
+      allow create, update: if isAdmin() && isValidGuest(request.resource.data);
+      allow delete: if isAdmin();
+    }
+  }
+}

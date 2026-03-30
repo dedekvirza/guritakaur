@@ -1,0 +1,9 @@
+{
+  "name": "Festival Gurita 2026 Invitation Maker",
+  "description": "Professional online invitation system for Festival Gurita 2026 'Sambal Langat Gurita' in Kaur, Bengkulu.",
+  "requestFramePermissions": [
+    "camera",
+    "microphone",
+    "geolocation"
+  ]
+}
