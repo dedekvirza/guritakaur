@@ -844,8 +844,16 @@ const InvitationPage = () => {
             config={{
               file: {
                 forceAudio: true,
-                attributes: {
-                  preload: 'auto',
+                attributes: { preload: 'auto' }
+              },
+              soundcloud: {
+                options: {
+                  auto_play: true,
+                  visual: false,
+                  show_comments: false,
+                  show_user: false,
+                  show_reposts: false,
+                  show_teaser: false
                 }
               },
               youtube: {

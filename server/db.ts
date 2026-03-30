@@ -35,6 +35,9 @@ db.exec(`
 
   INSERT OR IGNORE INTO settings (id, eventName, theme, dates, location, locationUrl, logoUrl, bannerUrl, heroLogoUrl, musicUrl, galleryImages)
   VALUES (1, 'FESTIVAL GURITA 2026', 'Sambal Langat Gurita', '22 – 23 Mei 2026', 'Lapangan Merdeka Bintuhan', '', '', '', '', '', '[]');
+
+  -- Force update music URL to the uploaded file with full domain
+  UPDATE settings SET musicUrl = 'https://wisatakaur.com/musik-undangan.mp3' WHERE id = 1;
 `);
 
 export default db;
