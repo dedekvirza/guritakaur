@@ -5,9 +5,7 @@ import React, { useState, useEffect } from 'react';
   Please refer to /DEVELOPER_NOTES.md for migration details and schema requirements.
 */
 import { Routes, Route, useNavigate, useParams, Link } from 'react-router-dom';
-import { onAuthStateChanged, User } from 'firebase/auth';
-import { doc, getDoc, setDoc, collection, onSnapshot, addDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore';
-import { auth, db, loginWithGoogle, logout, loginWithEmail, registerWithEmail } from './firebase';
+import { api } from './api';
 import { Guest, EventSettings } from './types';
 import { cn, generateSlug } from './lib/utils';
 import { 
@@ -22,55 +20,8 @@ import { motion, AnimatePresence } from 'motion/react';
 import { QRCodeSVG } from 'qrcode.react';
 import ReactPlayer from 'react-player';
 
-enum OperationType {
-  CREATE = 'create',
-  UPDATE = 'update',
-  DELETE = 'delete',
-  LIST = 'list',
-  GET = 'get',
-  WRITE = 'write',
-}
-
-interface FirestoreErrorInfo {
-  error: string;
-  operationType: OperationType;
-  path: string | null;
-  authInfo: {
-    userId: string | undefined;
-    email: string | null | undefined;
-    emailVerified: boolean | undefined;
-    isAnonymous: boolean | undefined;
-    tenantId: string | null | undefined;
-    providerInfo: {
-      providerId: string;
-      displayName: string | null;
-      email: string | null;
-      photoUrl: string | null;
-    }[];
-  }
-}
-
-function handleFirestoreError(error: unknown, operationType: OperationType, path: string | null) {
-  const errInfo: FirestoreErrorInfo = {
-    error: error instanceof Error ? error.message : String(error),
-    authInfo: {
-      userId: auth.currentUser?.uid,
-      email: auth.currentUser?.email,
-      emailVerified: auth.currentUser?.emailVerified,
-      isAnonymous: auth.currentUser?.isAnonymous,
-      tenantId: auth.currentUser?.tenantId,
-      providerInfo: auth.currentUser?.providerData.map(provider => ({
-        providerId: provider.providerId,
-        displayName: provider.displayName,
-        email: provider.email,
-        photoUrl: provider.photoURL
-      })) || []
-    },
-    operationType,
-    path
-  }
-  console.error('Firestore Error: ', JSON.stringify(errInfo));
-  throw new Error(JSON.stringify(errInfo));
+interface User {
+  username: string;
 }
 
 // --- Components ---
@@ -81,7 +32,7 @@ const Loading = () => (
   </div>
 );
 
-const LoginPage = () => {
+const LoginPage = ({ onLogin }: { onLogin: (user: User) => void }) => {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');
   const [error, setError] = useState('');
@@ -94,33 +45,10 @@ const LoginPage = () => {
     setLoading(true);
     setError('');
 
-    if (username === 'guritakaur' && password === 'sukses') {
-      const email = 'guritakaur@festival.com';
-      try {
-        await loginWithEmail(email, password);
-      } catch (err: any) {
-        console.error("Login Error Code:", err.code);
-        // If user doesn't exist or credentials invalid (which happens if user not found in some versions)
-        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/wrong-password') {
-          try {
-            await registerWithEmail(email, password);
-          } catch (regErr: any) {
-            console.error("Registration Error Code:", regErr.code);
-            if (regErr.code === 'auth/operation-not-allowed') {
-              setError('EMAIL_AUTH_DISABLED');
-            } else if (regErr.code === 'auth/email-already-in-use') {
-              setError('Username/Email sudah terdaftar tapi password salah.');
-            } else {
-              setError(`Gagal membuat akun: ${regErr.code}`);
-            }
-          }
-        } else if (err.code === 'auth/operation-not-allowed') {
-          setError('EMAIL_AUTH_DISABLED');
-        } else {
-          setError(`Kesalahan Sistem: ${err.code}`);
-        }
-      }
-    } else {
+    try {
+      const data = await api.login(username, password);
+      onLogin(data.user);
+    } catch (err: any) {
       setError('Username atau password salah.');
     }
     setLoading(false);
@@ -128,33 +56,6 @@ const LoginPage = () => {
 
   const renderError = () => {
     if (!error) return null;
-
-    if (error === 'EMAIL_AUTH_DISABLED') {
-      return (
-        <motion.div 
-          initial={{ opacity: 0, scale: 0.95 }}
-          animate={{ opacity: 1, scale: 1 }}
-          className="bg-amber-50 text-amber-800 px-5 py-4 rounded-2xl text-sm border border-amber-100 space-y-3"
-        >
-          <div className="flex items-center gap-2 font-bold text-amber-900">
-            <AlertCircle size={18} />
-            Konfigurasi Diperlukan
-          </div>
-          <p className="leading-relaxed">
-            Fitur <b>Email/Password</b> belum diaktifkan di Firebase Console Anda.
-          </p>
-          <div className="bg-white/50 p-3 rounded-xl text-[12px] space-y-1.5 border border-amber-200/50">
-            <p>1. Buka <b>Firebase Console</b></p>
-            <p>2. Menu <b>Authentication</b> &gt; <b>Sign-in method</b></p>
-            <p>3. Klik <b>Add new provider</b> &gt; <b>Email/Password</b></p>
-            <p>4. Aktifkan (Enable) dan klik <b>Save</b></p>
-          </div>
-          <p className="text-[11px] opacity-70 italic">
-            Setelah diaktifkan, silakan coba masuk kembali.
-          </p>
-        </motion.div>
-      );
-    }
 
     return (
       <motion.div 
@@ -214,30 +115,13 @@ const LoginPage = () => {
               <div className="w-5 h-5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
             ) : 'Masuk ke Panel Admin'}
           </button>
-
-          <div className="relative my-8">
-            <div className="absolute inset-0 flex items-center">
-              <div className="w-full border-t border-gray-100"></div>
-            </div>
-            <div className="relative flex justify-center text-sm">
-              <span className="px-4 bg-white text-gray-400">Atau</span>
-            </div>
-          </div>
-
-          <button 
-            type="button"
-            onClick={loginWithGoogle}
-            className="w-full bg-white text-gray-700 py-4 rounded-xl font-bold text-lg border border-gray-200 hover:bg-gray-50 transition-all flex items-center justify-center gap-3"
-          >
-            Masuk dengan Google
-          </button>
         </form>
       </motion.div>
     </div>
   );
 };
 
-const Navbar = ({ user }: { user: User | null }) => {
+const Navbar = ({ user, onLogout }: { user: User | null, onLogout: () => void }) => {
   const [isOpen, setIsOpen] = useState(false);
   
   return (
@@ -255,10 +139,10 @@ const Navbar = ({ user }: { user: User | null }) => {
               <>
                 <div className="flex items-center gap-2 mr-2 px-3 py-1.5 bg-gray-50 rounded-full border border-gray-100">
                   <div className="w-6 h-6 bg-[#E67E22] rounded-full flex items-center justify-center text-white text-[10px] font-bold">
-                    {user.email?.charAt(0).toUpperCase() || 'A'}
+                    {user.username?.charAt(0).toUpperCase() || 'A'}
                   </div>
                   <span className="text-xs font-medium text-gray-600">
-                    {user.email === 'guritakaur@festival.com' ? 'Admin' : (user.displayName || user.email)}
+                    {user.username}
                   </span>
                 </div>
                 <Link to="/" className="text-gray-600 hover:text-[#E67E22] px-3 py-2 rounded-md text-sm font-medium flex items-center gap-2">
@@ -268,7 +152,7 @@ const Navbar = ({ user }: { user: User | null }) => {
                   <SettingsIcon size={18} /> Pengaturan
                 </Link>
                 <button 
-                  onClick={logout}
+                  onClick={onLogout}
                   className="bg-gray-50 text-gray-600 hover:bg-gray-100 px-4 py-2 rounded-lg text-sm font-medium flex items-center gap-2 transition-colors"
                 >
                   <LogOut size={18} /> Keluar
@@ -297,11 +181,11 @@ const Navbar = ({ user }: { user: User | null }) => {
                 <>
                   <div className="px-3 py-2 border-b border-gray-50 mb-2">
                     <p className="text-xs text-gray-400 uppercase tracking-wider font-bold">Masuk sebagai</p>
-                    <p className="text-sm font-bold text-[#E67E22]">{user.email === 'guritakaur@festival.com' ? 'Admin' : (user.displayName || user.email)}</p>
+                    <p className="text-sm font-bold text-[#E67E22]">{user.username}</p>
                   </div>
                   <Link to="/" onClick={() => setIsOpen(false)} className="block text-gray-600 hover:text-[#E67E22] px-3 py-2 rounded-md text-base font-medium">Daftar Tamu</Link>
                   <Link to="/settings" onClick={() => setIsOpen(false)} className="block text-gray-600 hover:text-[#E67E22] px-3 py-2 rounded-md text-base font-medium">Pengaturan</Link>
-                  <button onClick={() => { logout(); setIsOpen(false); }} className="w-full text-left text-gray-600 hover:text-[#E67E22] px-3 py-2 rounded-md text-base font-medium">Keluar</button>
+                  <button onClick={() => { onLogout(); setIsOpen(false); }} className="w-full text-left text-gray-600 hover:text-[#E67E22] px-3 py-2 rounded-md text-base font-medium">Keluar</button>
                 </>
               )}
             </div>
@@ -322,16 +206,19 @@ const AdminDashboard = () => {
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
 
-  useEffect(() => {
-    const q = query(collection(db, 'guests'), orderBy('createdAt', 'desc'));
-    const unsubscribe = onSnapshot(q, (snapshot) => {
-      const guestList = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as Guest));
-      setGuests(guestList);
+  const fetchGuests = async () => {
+    try {
+      const data = await api.getGuests();
+      setGuests(data);
+    } catch (error) {
+      console.error('Failed to fetch guests', error);
+    } finally {
       setLoading(false);
-    }, (error) => {
-      handleFirestoreError(error, OperationType.LIST, 'guests');
-    });
-    return () => unsubscribe();
+    }
+  };
+
+  useEffect(() => {
+    fetchGuests();
   }, []);
 
   const handleAddGuest = async (e: React.FormEvent) => {
@@ -340,29 +227,30 @@ const AdminDashboard = () => {
     
     const slug = generateSlug(newName);
     try {
-      await addDoc(collection(db, 'guests'), {
+      await api.addGuest({
         name: newName,
         title: newTitle,
         phone: newPhone,
-        slug,
-        createdAt: Date.now()
+        slug
       });
       setNewName('');
       setNewTitle('');
       setNewPhone('');
+      fetchGuests();
     } catch (error) {
-      handleFirestoreError(error, OperationType.CREATE, 'guests');
+      console.error('Failed to add guest', error);
     }
   };
 
-  const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
+  const [deleteConfirmId, setDeleteConfirmId] = useState<string | number | null>(null);
 
-  const handleDeleteGuest = async (id: string) => {
+  const handleDeleteGuest = async (id: string | number) => {
     try {
-      await deleteDoc(doc(db, 'guests', id));
+      await api.deleteGuest(id);
       setDeleteConfirmId(null);
+      fetchGuests();
     } catch (error) {
-      handleFirestoreError(error, OperationType.DELETE, `guests/${id}`);
+      console.error('Failed to delete guest', error);
     }
   };
 
@@ -386,17 +274,17 @@ const AdminDashboard = () => {
           const phone = row.WhatsApp || row.phone || row.PHONE || row.WA || '';
           if (name) {
             const slug = generateSlug(name);
-            await addDoc(collection(db, 'guests'), {
+            await api.addGuest({
               name,
               title,
               phone: phone.toString(),
-              slug,
-              createdAt: Date.now()
+              slug
             });
           }
         }
+        fetchGuests();
       } catch (error) {
-        handleFirestoreError(error, OperationType.CREATE, 'guests');
+        console.error('Failed to upload guests', error);
       } finally {
         setIsUploading(false);
       }
@@ -642,17 +530,15 @@ const SettingsPage = () => {
   useEffect(() => {
     const fetchSettings = async () => {
       try {
-        const docRef = doc(db, 'settings', 'config');
-        const docSnap = await getDoc(docRef);
-        if (docSnap.exists()) {
-          const data = docSnap.data() as EventSettings;
+        const data = await api.getSettings();
+        if (data) {
           setSettings({
             ...data,
             galleryImages: data.galleryImages || []
           });
         }
       } catch (error) {
-        handleFirestoreError(error, OperationType.GET, 'settings/config');
+        console.error('Failed to fetch settings', error);
       } finally {
         setLoading(false);
       }
@@ -664,10 +550,10 @@ const SettingsPage = () => {
     e.preventDefault();
     setSaving(true);
     try {
-      await setDoc(doc(db, 'settings', 'config'), settings);
+      await api.updateSettings(settings);
       setSaveSuccess(true);
     } catch (error) {
-      handleFirestoreError(error, OperationType.WRITE, 'settings/config');
+      console.error('Failed to save settings', error);
     } finally {
       setSaving(false);
     }
@@ -871,65 +757,39 @@ const InvitationPage = () => {
   const [isPlaying, setIsPlaying] = useState(false);
 
   useEffect(() => {
-    let unsubscribeGuests: (() => void) | undefined;
-    let unsubscribeSettings: (() => void) | undefined;
-
     const init = async () => {
       try {
-        // Listen to settings
-        unsubscribeSettings = onSnapshot(doc(db, 'settings', 'config'), (docSnap) => {
-          if (docSnap.exists()) {
-            setSettings(docSnap.data() as EventSettings);
-          } else {
-            // Default settings if none exist
-            setSettings({
-              eventName: 'FESTIVAL GURITA 2026',
-              theme: 'Sambal Langat Gurita',
-              dates: '22 – 23 Mei 2026',
-              location: 'Lapangan Merdeka Bintuhan',
-              locationUrl: 'https://www.google.com/maps/dir/-4.5344493,103.0560675/Lapangan+Merdeka+Bintuhan,+684X%2BRHF,+Pasar+Baru,+Kaur+Selatan,+Kaur+Regency,+Bengkulu+38963/@-4.793615,103.3478331,286m/am=t/data=!3m1!1e3!4m13!4m12!1m1!4e1!1m5!1m1!1s0x2e37e52fc34e0bdd:0x1a8429c8d78609f0!2m2!1d103.3489328!2d-4.7929325!6m3!1i0!2i0!3i2!5m2!1e4!1e1?entry=ttu&g_ep=EgoyMDI2MDMyNC4wIKXMDSoASAFQAw%3D%3D',
-              logoUrl: '',
-              bannerUrl: '',
-              galleryImages: [
-                'https://picsum.photos/seed/kaur1/800/600',
-                'https://picsum.photos/seed/kaur2/800/600',
-                'https://picsum.photos/seed/kaur3/800/600',
-                'https://picsum.photos/seed/kaur4/800/600'
-              ],
-              heroLogoUrl: '',
-              musicUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'
-            });
-          }
-        }, (error) => {
-          handleFirestoreError(error, OperationType.GET, 'settings/config');
-        });
-
-        // Listen to specific guest by slug
-        const q = query(collection(db, 'guests'), where('slug', '==', slug));
-        unsubscribeGuests = onSnapshot(q, (snapshot) => {
-          if (!snapshot.empty) {
-            const found = snapshot.docs[0];
-            setGuest({ id: found.id, ...found.data() } as Guest);
-          } else {
-            setGuest(null);
-          }
-          setLoading(false);
-        }, (error) => {
-          handleFirestoreError(error, OperationType.LIST, 'guests');
-          setLoading(false);
-        });
+        const [settingsData, guestData] = await Promise.all([
+          api.getPublicSettings(),
+          api.getPublicGuest(slug || '')
+        ]);
+        
+        if (settingsData) {
+          setSettings(settingsData);
+        } else {
+          setSettings({
+            eventName: 'FESTIVAL GURITA 2026',
+            theme: 'Sambal Langat Gurita',
+            dates: '22 – 23 Mei 2026',
+            location: 'Lapangan Merdeka Bintuhan',
+            locationUrl: 'https://www.google.com/maps/dir/-4.5344493,103.0560675/Lapangan+Merdeka+Bintuhan,+684X%2BRHF,+Pasar+Baru,+Kaur+Selatan,+Kaur+Regency,+Bengkulu+38963/@-4.793615,103.3478331,286m/am=t/data=!3m1!1e3!4m13!4m12!1m1!4e1!1m5!1m1!1s0x2e37e52fc34e0bdd:0x1a8429c8d78609f0!2m2!1d103.3489328!2d-4.7929325!6m3!1i0!2i0!3i2!5m2!1e4!1e1?entry=ttu&g_ep=EgoyMDI2MDMyNC4wIKXMDSoASAFQAw%3D%3D',
+            logoUrl: '',
+            bannerUrl: '',
+            galleryImages: [],
+            heroLogoUrl: '',
+            musicUrl: 'https://www.soundhelix.com/examples/mp3/SoundHelix-Song-1.mp3'
+          });
+        }
+        
+        setGuest(guestData);
       } catch (error) {
         console.error("Initialization error:", error);
+      } finally {
         setLoading(false);
       }
     };
 
     init();
-
-    return () => {
-      if (unsubscribeGuests) unsubscribeGuests();
-      if (unsubscribeSettings) unsubscribeSettings();
-    };
   }, [slug]);
 
   if (loading) return <Loading />;
@@ -960,6 +820,8 @@ const InvitationPage = () => {
     setIsOpen(true);
     window.scrollTo({ top: 0, behavior: 'smooth' });
     setIsPlaying(true);
+    // Tambahan: Pastikan volume tidak 0 dan un-mute jika tertahan browser
+    setIsMuted(false);
   };
 
   const toggleMute = () => {
@@ -970,30 +832,28 @@ const InvitationPage = () => {
     <div className="min-h-screen bg-[#FDF8F1] font-sans selection:bg-[#E67E22]/20 overflow-x-hidden">
       {displaySettings.musicUrl && (
         <div className="fixed -z-50 opacity-0 pointer-events-none overflow-hidden" style={{ width: '1px', height: '1px' }}>
-          {React.createElement(ReactPlayer as any, {
-            url: displaySettings.musicUrl,
-            playing: isPlaying,
-            loop: true,
-            muted: isMuted,
-            width: "100%",
-            height: "100%",
-            playsinline: true,
-            config: {
-              youtube: {
-                playerVars: { 
-                  autoplay: 1, 
-                  controls: 0, 
-                  rel: 0 
+          <ReactPlayer
+            url={displaySettings.musicUrl}
+            playing={isPlaying}
+            loop={true}
+            muted={isMuted}
+            volume={0.8}
+            width="100%"
+            height="100%"
+            playsinline={true}
+            config={{
+              file: {
+                forceAudio: true,
+                attributes: {
+                  preload: 'auto',
                 }
               },
-              soundcloud: {
-                options: { auto_play: true, show_comments: false }
+              youtube: {
+                playerVars: { autoplay: 1, controls: 0, rel: 0 }
               }
-            },
-            onError: (e: any) => console.error("Music Player Error:", e),
-            onReady: () => console.log("Music Player Ready"),
-            onStart: () => console.log("Music Player Started")
-          })}
+            }}
+            onError={(e: any) => console.error("Music Player Error:", e)}
+          />
         </div>
       )}
 
@@ -1344,12 +1204,18 @@ export default function App() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, (u) => {
-      setUser(u);
-      setLoading(false);
-    });
-    return () => unsubscribe();
+    const token = localStorage.getItem('token');
+    if (token) {
+      // In a real app, you might want to verify the token with the server
+      setUser({ username: 'Admin' });
+    }
+    setLoading(false);
   }, []);
+
+  const handleLogout = () => {
+    api.logout();
+    setUser(null);
+  };
 
   if (loading) return <Loading />;
 
@@ -1363,22 +1229,22 @@ export default function App() {
         <Route path="/" element={
           user ? (
             <>
-              <Navbar user={user} />
+              <Navbar user={user} onLogout={handleLogout} />
               <AdminDashboard />
             </>
           ) : (
-            <LoginPage />
+            <LoginPage onLogin={setUser} />
           )
         } />
         
         <Route path="/settings" element={
           user ? (
             <>
-              <Navbar user={user} />
+              <Navbar user={user} onLogout={handleLogout} />
               <SettingsPage />
             </>
           ) : (
-            <Link to="/" />
+            <LoginPage onLogin={setUser} />
           )
         } />
       </Routes>
