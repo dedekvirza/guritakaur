@@ -1,4 +1,9 @@
 import React, { useState, useEffect } from 'react';
+/* 
+  DEVELOPER NOTE: 
+  The owner plans to migrate this app from Firestore to SQLite for VPS deployment.
+  Please refer to /DEVELOPER_NOTES.md for migration details and schema requirements.
+*/
 import { Routes, Route, useNavigate, useParams, Link } from 'react-router-dom';
 import { onAuthStateChanged, User } from 'firebase/auth';
 import { doc, getDoc, setDoc, collection, onSnapshot, addDoc, deleteDoc, query, orderBy, where } from 'firebase/firestore';
