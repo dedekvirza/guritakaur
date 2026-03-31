@@ -4,6 +4,7 @@ export interface Guest {
   title?: string;
   phone?: string;
   slug: string;
+  waSent?: boolean | number;
   createdAt: number;
 }
 

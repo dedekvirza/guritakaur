@@ -85,6 +85,12 @@ app.delete('/api/admin/guests/:id', authenticateToken, (req, res) => {
   res.json({ success: true });
 });
 
+app.post('/api/admin/guests/:id/toggle-wa', authenticateToken, (req, res) => {
+  const { waSent } = req.body;
+  db.prepare('UPDATE guests SET waSent = ? WHERE id = ?').run(waSent ? 1 : 0, req.params.id);
+  res.json({ success: true });
+});
+
 // --- ADMIN SETTINGS API ---
 app.get('/api/admin/settings', authenticateToken, (req, res) => {
   const settings = db.prepare('SELECT * FROM settings WHERE id = 1').get();

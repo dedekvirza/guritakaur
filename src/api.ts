@@ -65,6 +65,16 @@ export const api = {
     return res.json();
   },
 
+  toggleWaSent: async (id: number | string, waSent: boolean) => {
+    const res = await fetch(`${API_URL}/api/admin/guests/${id}/toggle-wa`, {
+      method: 'POST',
+      headers: getHeaders(),
+      body: JSON.stringify({ waSent })
+    });
+    if (!res.ok) throw new Error('Failed to toggle WA status');
+    return res.json();
+  },
+
   getSettings: async () => {
     const res = await fetch(`${API_URL}/api/admin/settings`, { headers: getHeaders() });
     if (!res.ok) throw new Error('Failed to fetch settings');

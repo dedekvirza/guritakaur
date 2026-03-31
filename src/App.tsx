@@ -205,6 +205,8 @@ const AdminDashboard = () => {
   const [newPhone, setNewPhone] = useState('');
   const [loading, setLoading] = useState(true);
   const [isUploading, setIsUploading] = useState(false);
+  const [searchTerm, setSearchTerm] = useState('');
+  const [filterStatus, setFilterStatus] = useState<'all' | 'sent' | 'unsent'>('all');
 
   const fetchGuests = async () => {
     try {
@@ -292,7 +294,7 @@ const AdminDashboard = () => {
     reader.readAsBinaryString(file);
   };
 
-  const sendWhatsApp = (guest: Guest) => {
+  const sendWhatsApp = async (guest: Guest) => {
     const invitationUrl = `${window.location.origin}/u/${guest.slug}`;
     const message = `Assalamu'alaikum Warahmatullahi Wabarakatuh.
 
@@ -316,6 +318,37 @@ Terima kasih.`;
       : `https://api.whatsapp.com/send?text=${encodedMessage}`;
     
     window.open(whatsappUrl, '_blank');
+
+    if (guest.id) {
+      try {
+        await api.toggleWaSent(guest.id, true);
+        fetchGuests();
+      } catch (error) {
+        console.error('Failed to update WA status', error);
+      }
+    }
+  };
+
+  const filteredGuests = guests.filter(guest => {
+    const matchesSearch = guest.name.toLowerCase().includes(searchTerm.toLowerCase());
+    const isSent = guest.waSent === 1 || guest.waSent === true;
+    
+    if (filterStatus === 'sent') return matchesSearch && isSent;
+    if (filterStatus === 'unsent') return matchesSearch && !isSent;
+    return matchesSearch;
+  });
+
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 20;
+  const totalPages = Math.ceil(filteredGuests.length / itemsPerPage);
+  const currentItems = filteredGuests.slice(
+    (currentPage - 1) * itemsPerPage,
+    currentPage * itemsPerPage
+  );
+
+  const handlePageChange = (page: number) => {
+    setCurrentPage(page);
+    window.scrollTo({ top: 0, behavior: 'smooth' });
   };
 
   if (loading) return <Loading />;
@@ -388,12 +421,34 @@ Terima kasih.`;
         {/* Right: Guest List */}
         <div className="lg:col-span-2">
           <div className="bg-white rounded-2xl shadow-sm border border-gray-100 overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-gray-50/50">
-              <h2 className="font-bold text-gray-900">Daftar Tamu ({guests.length})</h2>
-              <div className="flex gap-2">
-                {/* Add export button if needed */}
+            <div className="px-6 py-4 border-b border-gray-100 bg-gray-50/50 space-y-4">
+              <div className="flex justify-between items-center">
+                <h2 className="font-bold text-gray-900">Daftar Tamu ({filteredGuests.length})</h2>
+              </div>
+              
+              <div className="flex flex-col sm:flex-row gap-3">
+                <div className="relative flex-1">
+                  <input
+                    type="text"
+                    placeholder="Cari nama tamu..."
+                    value={searchTerm}
+                    onChange={(e) => setSearchTerm(e.target.value)}
+                    className="w-full pl-10 pr-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#E67E22] outline-none text-sm"
+                  />
+                  <Users size={18} className="absolute left-3 top-2.5 text-gray-400" />
+                </div>
+                <select
+                  value={filterStatus}
+                  onChange={(e) => setFilterStatus(e.target.value as any)}
+                  className="px-4 py-2 rounded-lg border border-gray-200 focus:ring-2 focus:ring-[#E67E22] outline-none text-sm bg-white"
+                >
+                  <option value="all">Semua Tamu</option>
+                  <option value="sent">Sudah Kirim WA</option>
+                  <option value="unsent">Belum Kirim WA</option>
+                </select>
               </div>
             </div>
+            
             <div className="overflow-x-auto">
               <table className="w-full text-left">
                 <thead>
@@ -405,55 +460,120 @@ Terima kasih.`;
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-100">
-                  {guests.map((guest) => (
-                    <tr key={guest.id} className="hover:bg-gray-50 transition-colors group">
-                      <td className="px-6 py-4">
-                        <div className="font-medium text-gray-900">{guest.name}</div>
-                        <div className="text-xs text-gray-500">{guest.title || '-'}</div>
-                        {guest.phone && <div className="text-[10px] text-gray-400 mt-1">{guest.phone}</div>}
-                      </td>
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-2">
-                          <code className="text-xs bg-gray-100 px-2 py-1 rounded text-[#E67E22]">/{guest.slug}</code>
-                          <a 
-                            href={`/u/${guest.slug}`} 
-                            target="_blank" 
-                            rel="noopener noreferrer"
-                            className="text-gray-400 hover:text-[#E67E22] transition-colors"
+                  {currentItems.map((guest) => {
+                    const isSent = guest.waSent === 1 || guest.waSent === true;
+                    return (
+                      <tr key={guest.id} className="hover:bg-gray-50 transition-colors group">
+                        <td className="px-6 py-4">
+                          <div className="font-medium text-gray-900">{guest.name}</div>
+                          <div className="text-xs text-gray-500">{guest.title || '-'}</div>
+                          {guest.phone && <div className="text-[10px] text-gray-400 mt-1">{guest.phone}</div>}
+                        </td>
+                        <td className="px-6 py-4">
+                          <div className="flex items-center gap-2">
+                            <code className="text-xs bg-gray-100 px-2 py-1 rounded text-[#E67E22]">/{guest.slug}</code>
+                            <a 
+                              href={`/u/${guest.slug}`} 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="text-gray-400 hover:text-[#E67E22] transition-colors"
+                            >
+                              <ExternalLink size={14} />
+                            </a>
+                          </div>
+                        </td>
+                        <td className="px-6 py-4">
+                          <button 
+                            onClick={() => sendWhatsApp(guest)}
+                            className={cn(
+                              "flex items-center gap-1 text-xs font-medium px-3 py-1.5 rounded-full transition-colors",
+                              isSent 
+                                ? "text-red-600 hover:text-red-700 bg-red-50" 
+                                : "text-green-600 hover:text-green-700 bg-green-50"
+                            )}
                           >
-                            <ExternalLink size={14} />
-                          </a>
-                        </div>
-                      </td>
-                      <td className="px-6 py-4">
-                        <button 
-                          onClick={() => sendWhatsApp(guest)}
-                          className="flex items-center gap-1 text-xs font-medium text-green-600 hover:text-green-700 bg-green-50 px-3 py-1.5 rounded-full transition-colors"
-                        >
-                          <MessageCircle size={14} />
-                          Kirim WA
-                        </button>
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <button 
-                          onClick={() => setDeleteConfirmId(guest.id!)}
-                          className="text-gray-300 hover:text-red-500 transition-colors p-2"
-                        >
-                          <Trash2 size={18} />
-                        </button>
-                      </td>
-                    </tr>
-                  ))}
-                  {guests.length === 0 && (
+                            <MessageCircle size={14} />
+                            {isSent ? 'Sudah Kirim' : 'Kirim WA'}
+                          </button>
+                        </td>
+                        <td className="px-6 py-4 text-right">
+                          <button 
+                            onClick={() => setDeleteConfirmId(guest.id!)}
+                            className="text-gray-300 hover:text-red-500 transition-colors p-2"
+                          >
+                            <Trash2 size={18} />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  })}
+                  {currentItems.length === 0 && (
                     <tr>
-                      <td colSpan={3} className="px-6 py-12 text-center text-gray-400 italic">
-                        Belum ada tamu yang terdaftar.
+                      <td colSpan={4} className="px-6 py-12 text-center text-gray-400 italic">
+                        {searchTerm ? 'Tamu tidak ditemukan.' : 'Belum ada tamu yang terdaftar.'}
                       </td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
+
+            {/* Pagination UI */}
+            {totalPages > 1 && (
+              <div className="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50/50">
+                <div className="text-sm text-gray-500">
+                  Halaman <span className="font-medium">{currentPage}</span> dari <span className="font-medium">{totalPages}</span>
+                </div>
+                <div className="flex gap-1">
+                  <button
+                    onClick={() => handlePageChange(Math.max(1, currentPage - 1))}
+                    disabled={currentPage === 1}
+                    className="p-2 rounded hover:bg-white border border-transparent hover:border-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    <ChevronRight size={18} className="rotate-180" />
+                  </button>
+                  
+                  {[...Array(totalPages)].map((_, i) => {
+                    const page = i + 1;
+                    // Only show limited page numbers if too many
+                    if (
+                      page === 1 || 
+                      page === totalPages || 
+                      (page >= currentPage - 1 && page <= currentPage + 1)
+                    ) {
+                      return (
+                        <button
+                          key={page}
+                          onClick={() => handlePageChange(page)}
+                          className={cn(
+                            "w-8 h-8 rounded text-sm font-medium transition-all border",
+                            currentPage === page
+                              ? "bg-[#E67E22] text-white border-[#E67E22]"
+                              : "bg-white text-gray-600 border-gray-200 hover:border-[#E67E22] hover:text-[#E67E22]"
+                          )}
+                        >
+                          {page}
+                        </button>
+                      );
+                    } else if (
+                      page === currentPage - 2 || 
+                      page === currentPage + 2
+                    ) {
+                      return <span key={page} className="px-1 text-gray-400">...</span>;
+                    }
+                    return null;
+                  })}
+
+                  <button
+                    onClick={() => handlePageChange(Math.min(totalPages, currentPage + 1))}
+                    disabled={currentPage === totalPages}
+                    className="p-2 rounded hover:bg-white border border-transparent hover:border-gray-200 disabled:opacity-30 disabled:cursor-not-allowed transition-all"
+                  >
+                    <ChevronRight size={18} />
+                  </button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -831,38 +951,24 @@ const InvitationPage = () => {
   return (
     <div className="min-h-screen bg-[#FDF8F1] font-sans selection:bg-[#E67E22]/20 overflow-x-hidden">
       {displaySettings.musicUrl && (
-        <div className="fixed -z-50 opacity-0 pointer-events-none overflow-hidden" style={{ width: '1px', height: '1px' }}>
-          <ReactPlayer
-            url={displaySettings.musicUrl}
-            playing={isPlaying}
-            loop={true}
-            muted={isMuted}
-            volume={0.8}
-            width="100%"
-            height="100%"
-            playsinline={true}
-            config={{
-              file: {
-                forceAudio: true,
-                attributes: { preload: 'auto' }
-              },
-              soundcloud: {
-                options: {
-                  auto_play: true,
-                  visual: false,
-                  show_comments: false,
-                  show_user: false,
-                  show_reposts: false,
-                  show_teaser: false
-                }
-              },
-              youtube: {
-                playerVars: { autoplay: 1, controls: 0, rel: 0 }
+        <audio
+          id="bg-music"
+          src={displaySettings.musicUrl}
+          loop
+          autoPlay={false}
+          style={{ display: 'none' }}
+          ref={(el) => {
+            if (el) {
+              if (isPlaying && !isMuted) {
+                el.play().catch(e => console.error("Audio play failed:", e));
+                el.volume = 1.0;
+              } else {
+                el.pause();
               }
-            }}
-            onError={(e: any) => console.error("Music Player Error:", e)}
-          />
-        </div>
+              el.muted = isMuted;
+            }
+          }}
+        />
       )}
 
       {isOpen && displaySettings.musicUrl && (

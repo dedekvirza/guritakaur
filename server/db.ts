@@ -5,7 +5,7 @@ import { fileURLToPath } from 'url';
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-const dbPath = path.resolve(__dirname, '../../database.db');
+const dbPath = path.resolve(__dirname, '../database.db');
 const db = new Database(dbPath);
 
 // Initialize Tables
@@ -16,6 +16,7 @@ db.exec(`
     title TEXT,
     phone TEXT,
     slug TEXT UNIQUE NOT NULL,
+    waSent INTEGER DEFAULT 0,
     createdAt INTEGER DEFAULT (strftime('%s', 'now'))
   );
 
